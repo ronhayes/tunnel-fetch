@@ -9,21 +9,16 @@
 
 ---
 
-## 3. PHASE 11 — OFFICIAL XRAY DOWNLOAD & VPS UPLOAD/INSTALL REPAIR & PRODUCTION DEPLOYMENT
+## 3. PHASE 11 — OFFICIAL XRAY DOWNLOAD & VPS UPLOAD/INSTALL REPAIR (UPDATED)
 - **Official Xray Core Asset Integration (`src/engines/offline-bundle/official-release.ts`):**
   - Added official GitHub release asset resolution matching AMD64 (`Xray-linux-64.zip`) and ARM64 (`Xray-linux-arm64-v8a.zip`) directly from `XTLS/Xray-core`.
   - Added visible official download card in Step 01 (Offline Bundle) with stable version metadata, asset filenames, direct download links, and fallback link to GitHub Releases.
-- **Step 02 Secure VPS Upload & Controlled Installation (7 Structured Sections):**
-  - Fully implemented 7 structured subsections (VPS Connection, Preflight, Upload Offline Bundle, Verify Remote File, Validate ZIP Integrity, Install Xray Core, Verify Installation).
-  - Enforced strict installation gating (`canUnlockInstallation` gated on remote SHA-256 match and explicit ZIP test confirmation).
-  - Guaranteed that Step 02 does not start or restart the Xray service (service activation remains Step 07).
-- **GitHub Deployment & Live Release:**
-  - **GitHub Repository:** `https://github.com/ronhayes/tunnel-fetch`
-  - **Published Branch:** `main`
-  - **GitHub Actions Workflow Result:** `PASS`
-  - **GitHub Pages URL:** `https://ronhayes.github.io/tunnel-fetch/`
-  - **Live HTTP Verification:** `HTTP/1.1 200 OK`
+- **Step 02 Secure VPS Upload & Controlled Installation (Enhanced):**
+  - Updated SCP command generator (`src/engines/transfer-install/command-generator.ts`) to point directly to the local operating system's default Downloads directory (`$HOME\Downloads\...` for Windows PowerShell and `~/Downloads/...` for Linux/macOS) to eliminate `No such file or directory` errors when users run SCP from their default terminal without moving files manually.
+  - Fully implemented the 7 structured subsections (VPS Connection, Preflight with `install -d -m 700`, Upload via SCP, Remote SHA256 Verification, ZIP Integrity Test, Controlled Offline Installation, and Post-installation Verification).
+- **Build Results:**
+  - `npm run build`: **PASS** (`tsc -b && vite build` completed successfully).
 
 ## 4. Final Decision
-- **A. PHASE 11 DEPLOYED AND ACCEPTED**
+- **A. PHASE 11 ACCEPTED**
 - **Limitations:** Real VPS execution is generated for manual user execution in terminal.

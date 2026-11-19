@@ -25,8 +25,9 @@ export function generateTransferCommands(opts: TransferOptions): { preflight: st
 
   if (opts.localOs === 'windows-powershell') {
     const keyFlagPowerShell = keyArgKey ? `-i "${keyArgKey}"` : '';
-    preflight = `ssh ${opts.sshUser}@${opts.vpsIp} -p ${portArg} ${keyFlagPowerShell} "cat /etc/os-release && uname -m && id && command -v systemctl && command -v sha256sum && command -v unzip"`;
-    transfer = `scp -P ${portArg} ${keyFlagPowerShell} .\\${opts.zipFilename} ${opts.sshUser}@${opts.vpsIp}:${opts.remoteStagingDir}/`;
+    preflight = `ssh ${opts.sshUser}@${opts.vpsIp} -p ${portArg} ${keyFlagPowerShell} "install -d -m 700 ${opts.remoteStagingDir} && cat /etc/os-release && uname -m && id && command -v systemctl && command -v sha256sum && command -v unzip"`;
+    // Point directly to user's Downloads folder where browser saves files by default
+    transfer = `scp -P ${portArg} ${keyFlagPowerShell} "$HOME\\Downloads\\${opts.zipFilename}" ${opts.sshUser}@${opts.vpsIp}:${opts.remoteStagingDir}/`;
     verify = `ssh ${opts.sshUser}@${opts.vpsIp} -p ${portArg} ${keyFlagPowerShell} "echo '${opts.expectedSha256}  ${remoteZipPath}' | sha256sum -c -"`;
     inspect = `ssh ${opts.sshUser}@${opts.vpsIp} -p ${portArg} ${keyFlagPowerShell} "unzip -t ${remoteZipPath} && unzip -l ${remoteZipPath}"`;
     install = `ssh ${opts.sshUser}@${opts.vpsIp} -p ${portArg} ${keyFlagPowerShell} "mkdir -p ${opts.remoteStagingDir}/extracted && unzip -q ${remoteZipPath} -d ${opts.remoteStagingDir}/extracted && cd ${opts.remoteStagingDir}/extracted && sudo bash scripts/install.sh"`;
@@ -34,8 +35,8 @@ export function generateTransferCommands(opts: TransferOptions): { preflight: st
   } else {
     // Linux / macOS Bash
     const keyFlagBash = keyArgKey ? `-i "${keyArgKey}"` : '';
-    preflight = `ssh ${opts.sshUser}@${opts.vpsIp} -p ${portArg} ${keyFlagBash} "cat /etc/os-release && uname -m && id && command -v systemctl && command -v sha256sum && command -v unzip"`;
-    transfer = `scp -P ${portArg} ${keyFlagBash} "./${opts.zipFilename}" "${opts.sshUser}@${opts.vpsIp}:${opts.remoteStagingDir}/"`;
+    preflight = `ssh ${opts.sshUser}@${opts.vpsIp} -p ${portArg} ${keyFlagBash} "install -d -m 700 '${opts.remoteStagingDir}' && cat /etc/os-release && uname -m && id && command -v systemctl && command -v sha256sum && command -v unzip"`;
+    transfer = `scp -P ${portArg} ${keyFlagBash} "$HOME/Downloads/${opts.zipFilename}" "${opts.sshUser}@${opts.vpsIp}:${opts.remoteStagingDir}/"`;
     verify = `ssh ${opts.sshUser}@${opts.vpsIp} -p ${portArg} ${keyFlagBash} "echo '${opts.expectedSha256}  ${remoteZipPath}' | sha256sum -c -"`;
     inspect = `ssh ${opts.sshUser}@${opts.vpsIp} -p ${portArg} ${keyFlagBash} "unzip -t '${remoteZipPath}' && unzip -l '${remoteZipPath}'"`;
     install = `ssh ${opts.sshUser}@${opts.vpsIp} -p ${portArg} ${keyFlagBash} "mkdir -p '${opts.remoteStagingDir}/extracted' && unzip -q '${remoteZipPath}' -d '${opts.remoteStagingDir}/extracted' && cd '${opts.remoteStagingDir}/extracted' && sudo bash scripts/install.sh"`;
