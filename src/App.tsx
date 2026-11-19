@@ -31,6 +31,7 @@ export function App() {
   });
 
   const t = translations[lang];
+  const isRtl = lang === 'fa';
 
   const handleToggleLang = () => {
     const newLang = lang === 'fa' ? 'en' : 'fa';
@@ -79,8 +80,8 @@ export function App() {
 
   return (
     <div
-      dir={lang === 'fa' ? 'rtl' : 'ltr'}
-      className="flex flex-col h-screen w-screen overflow-hidden bg-[#111318] text-[#94A3B8] font-sans select-none"
+      dir={isRtl ? 'rtl' : 'ltr'}
+      className="flex flex-col h-screen w-screen overflow-hidden bg-[#0B0D10] text-[#F8FAFC] font-sans select-none"
     >
       {/* Header */}
       <Header
@@ -93,50 +94,78 @@ export function App() {
       />
 
       {/* Mobile Sidebar Toggle Bar */}
-      <div className="md:hidden bg-[#111318] border-b border-[#20242D] px-4 py-2 flex items-center justify-between">
+      <div className="md:hidden bg-[#161922] border-b border-[#2A303C] px-4 py-2 flex items-center justify-between shrink-0">
         <button
           onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-          className="flex items-center space-x-2 rtl:space-x-reverse text-white text-xs font-mono bg-[#20242D] px-3 py-1.5 rounded-lg border border-[#20242D]"
+          className="flex items-center space-x-2 rtl:space-x-reverse text-white text-xs font-mono bg-[#1E222D] px-3 py-1.5 rounded-lg border border-[#2A303C]"
         >
           {isMobileSidebarOpen ? <X className="w-4 h-4 text-[#F59E0B]" /> : <Menu className="w-4 h-4 text-[#F59E0B]" />}
           <span>{t.stepsHeader} ({activeStepId}/10)</span>
         </button>
-        <span className="text-xs text-[#22D3EE] font-mono">{currentStep.titleFa}</span>
+        <span className="text-xs text-[#22D3EE] font-mono">{isRtl ? currentStep.titleFa : currentStep.titleEn}</span>
       </div>
 
-      {/* Main Body Layout */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Sidebar */}
-        <Sidebar
-          steps={steps}
-          activeStepId={activeStepId}
-          onSelectStep={(id) => setActiveStepId(id)}
-          lang={lang}
-          isOpen={isMobileSidebarOpen}
-          onCloseMobile={() => setIsMobileSidebarOpen(false)}
-          runtimeStatuses={engineState.runtimeStatuses}
-        />
+      {/* Main 3-Column Deterministic Grid Layout with Grid Template Areas */}
+      <div
+        className="flex-1 overflow-hidden relative w-full"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr',
+          gridTemplateRows: '100%',
+        }}
+      >
+        <style>{`
+          @media (min-width: 768px) {
+            .app-grid-layout {
+              display: grid !important;
+              grid-template-columns: ${isRtl ? '300px minmax(0, 1fr) 280px' : '280px minmax(0, 1fr) 300px'};
+              grid-template-areas: ${isRtl ? '"status workspace sidebar"' : '"sidebar workspace status"'};
+            }
+          }
+          @media (min-width: 1024px) {
+            .app-grid-layout {
+              grid-template-columns: ${isRtl ? '320px minmax(0, 1fr) 300px' : '300px minmax(0, 1fr) 320px'};
+            }
+          }
+        `}</style>
+        <div className="app-grid-layout h-full w-full overflow-hidden" style={{ display: 'flex', flexDirection: 'column' }}>
+          {/* Sidebar */}
+          <div className="h-full overflow-hidden flex flex-col bg-[#161922]" style={{ gridArea: 'sidebar' }}>
+            <Sidebar
+              steps={steps}
+              activeStepId={activeStepId}
+              onSelectStep={(id) => setActiveStepId(id)}
+              lang={lang}
+              isOpen={isMobileSidebarOpen}
+              onCloseMobile={() => setIsMobileSidebarOpen(false)}
+              runtimeStatuses={engineState.runtimeStatuses}
+            />
+          </div>
 
-        {/* Workspace & Status Panel Container */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto p-4 md:p-6 bg-[#111318]">
-          <SessionStatusPanel
-            sessionState={sessionState}
-            lang={lang}
-            isOpen={isStatusPanelOpen}
-            onClose={() => setIsStatusPanelOpen(false)}
-            runtimeStatuses={engineState.runtimeStatuses}
-            activeStepId={activeStepId}
-          />
+          {/* Main Workspace (Center) */}
+          <div className="h-full overflow-y-auto flex flex-col bg-[#0B0D10] p-4 md:p-6 min-w-0" style={{ gridArea: 'workspace' }}>
+            <MainWorkspace
+              step={currentStep}
+              lang={lang}
+              onToggleStatusPanel={() => setIsStatusPanelOpen(!isStatusPanelOpen)}
+              isStatusPanelOpen={isStatusPanelOpen}
+              runtimeStatus={engineState.runtimeStatuses[activeStepId] || 'NOT_STARTED'}
+              onUpdateRuntimeStatus={handleUpdateRuntimeStatus}
+              allRuntimeStatuses={engineState.runtimeStatuses}
+            />
+          </div>
 
-          <MainWorkspace
-            step={currentStep}
-            lang={lang}
-            onToggleStatusPanel={() => setIsStatusPanelOpen(!isStatusPanelOpen)}
-            isStatusPanelOpen={isStatusPanelOpen}
-            runtimeStatus={engineState.runtimeStatuses[activeStepId] || 'NOT_STARTED'}
-            onUpdateRuntimeStatus={handleUpdateRuntimeStatus}
-            allRuntimeStatuses={engineState.runtimeStatuses}
-          />
+          {/* Session Status Panel */}
+          <div className={`h-full overflow-y-auto flex flex-col bg-[#161922] p-4 ${isStatusPanelOpen ? 'block' : 'hidden md:block'}`} style={{ gridArea: 'status' }}>
+            <SessionStatusPanel
+              sessionState={sessionState}
+              lang={lang}
+              isOpen={isStatusPanelOpen}
+              onClose={() => setIsStatusPanelOpen(false)}
+              runtimeStatuses={engineState.runtimeStatuses}
+              activeStepId={activeStepId}
+            />
+          </div>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Terminal, CheckCircle, Sliders, Database, Lock, ShieldCheck, RefreshCw, Download, Copy, Code, Package, FileCheck, Server, Laptop, Upload, Activity, Globe, ShieldAlert, ArrowDownCircle } from 'lucide-react';
+import { Terminal, CheckCircle, Sliders, Database, Lock, ShieldCheck, RefreshCw, Download, Copy, Code, Package, FileCheck, Server, Laptop, Upload, Activity, Globe, ShieldAlert, ArrowDownCircle, ExternalLink as ExternalIcon } from 'lucide-react';
 import type { Language, WorkflowStep } from '../types';
 import { translations } from '../i18n';
 import { CommandCenter } from './CommandCenter';
@@ -13,6 +13,7 @@ import { COMPATIBILITY_MATRIX, validateCompatibility, type LinuxDistro, type Lin
 import { computeSha256 } from '../engines/offline-bundle/checksum';
 import { buildOfflineBundle } from '../engines/offline-bundle/builder';
 import type { BundleManifest } from '../engines/offline-bundle/manifest';
+import { getOfficialDownloadUrl, getExpectedAssetName, OFFICIAL_RELEASES_PAGE } from '../engines/offline-bundle/official-release';
 import { generateTransferCommands, type TransferOptions } from '../engines/transfer-install/command-generator';
 import { generateConfigUploadCommands, type ConfigUploadOptions } from '../engines/transfer-install/config-upload-generator';
 import { generateConfigApplyCommands, type ConfigApplyOptions } from '../engines/transfer-install/config-apply-generator';
@@ -53,12 +54,12 @@ export function MainWorkspace({
   const [calculatingHash, setCalculatingHash] = useState(false);
   const [bundleManifest, setBundleManifest] = useState<BundleManifest | null>(null);
   const [bundleBlob, setBundleBlob] = useState<Blob | null>(null);
-  const [bundleFileName, setBundleFileName] = useState('tunnel-fetch-offline.zip');
+  const [bundleFileName, setBundleFileName] = useState('tunnel-fetch-offline-bundle.zip');
   const [acceptedStep1, setAcceptedStep1] = useState(false);
 
   const binaryInputRef = useRef<HTMLInputElement>(null);
 
-  // Step 2 state (Transfer & Install)
+  // Step 2 state (Transfer & Install - 7 Structured Sections)
   const [transferOpts, setTransferOpts] = useState<TransferOptions>({
     localOs: 'windows-powershell',
     vpsIp: '203.0.113.50',
@@ -66,10 +67,12 @@ export function MainWorkspace({
     sshUser: 'root',
     authMethod: 'key',
     privateKeyPath: '~/.ssh/id_rsa',
-    remoteStagingDir: '/tmp/tunnel-fetch-staging',
-    zipFilename: 'tunnel-fetch-offline.zip',
+    remoteStagingDir: '/tmp/tunnel-fetch',
+    zipFilename: 'tunnel-fetch-offline-bundle.zip',
     expectedSha256: ''
   });
+  const [remoteSha256Input, setRemoteSha256Input] = useState('');
+  const [zipIntegrityConfirmed, setZipIntegrityConfirmed] = useState(false);
   const [acceptedStep2, setAcceptedStep2] = useState(false);
 
   // Step 3 state
@@ -152,6 +155,10 @@ export function MainWorkspace({
   const prereqCheck = checkStepPrerequisites(step.id, allRuntimeStatuses as any);
   const compatibility = validateCompatibility(selectedDistro, selectedArch);
 
+  // Official Xray release asset details
+  const officialAssetName = getExpectedAssetName(selectedArch);
+  const officialDownloadUrl = getOfficialDownloadUrl(xrayVersion, selectedArch);
+
   // Handle Binary File Selection & Hash Calculation
   const handleBinarySelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -162,7 +169,7 @@ export function MainWorkspace({
       const buffer = await file.arrayBuffer();
       const hash = await computeSha256(buffer);
       setBinaryHash(hash);
-      setTransferOpts(prev => ({ ...prev, expectedSha256: hash }));
+      setTransferOpts(prev => ({ ...prev, expectedSha256: hash, zipFilename: bundleFileName }));
     } catch (err) {
       console.error('Failed to compute hash', err);
     } finally {
@@ -206,7 +213,11 @@ export function MainWorkspace({
 
   // Step 2 handlers
   const transferCommands = generateTransferCommands(transferOpts);
+  const isHashMatching = remoteSha256Input.trim().toLowerCase() === binaryHash.trim().toLowerCase();
+  const canUnlockInstallation = isHashMatching && zipIntegrityConfirmed;
+
   const handleAcceptStep2 = () => {
+    if (!canUnlockInstallation) return;
     setAcceptedStep2(true);
     onUpdateRuntimeStatus(step.id, 'PASS');
   };
@@ -254,7 +265,6 @@ export function MainWorkspace({
       setUploadOpts(prev => ({ ...prev, expectedSha256: hash, vpsIp: transferOpts.vpsIp, sshPort: transferOpts.sshPort, sshUser: transferOpts.sshUser }));
       setApplyOpts(prev => ({ ...prev, vpsIp: transferOpts.vpsIp, sshPort: transferOpts.sshPort, sshUser: transferOpts.sshUser, authMethod: transferOpts.authMethod, privateKeyPath: transferOpts.privateKeyPath }));
       setConnOpts(prev => ({ ...prev, vpsIp: transferOpts.vpsIp, sshPort: transferOpts.sshPort, sshUser: transferOpts.sshUser, authMethod: transferOpts.authMethod, privateKeyPath: transferOpts.privateKeyPath, socksPort: genOptions.socksPort }));
-      setTargetOpts(prev => ({ ...prev, socksPort: genOptions.socksPort }));
       onUpdateRuntimeStatus(step.id, 'WAITING_USER');
     }
   };
@@ -391,258 +401,364 @@ export function MainWorkspace({
         </div>
       )}
 
-      {/* STEP 1: OFFLINE BUNDLE */}
+      {/* STEP 1: OFFLINE BUNDLE WITH OFFICIAL XRAY DOWNLOAD CARD */}
       {step.id === 1 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="bg-[#111318] border border-[#20242D] rounded-2xl p-5 shadow-lg space-y-4 font-mono text-xs">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Package className="w-4 h-4 text-[#F59E0B]" />
-              {lang === 'fa' ? 'انتخاب پلتفرم و فایل‌های باینری Xray Core' : 'Platform Target & Binary Asset Selection'}
-            </h3>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[#94A3B8] mb-1">{lang === 'fa' ? 'توزیع لینوکس هدف' : 'Target Linux Distribution'}</label>
-                <select
-                  value={selectedDistro}
-                  onChange={(e) => setSelectedDistro(e.target.value as LinuxDistro)}
-                  className="w-full bg-[#20242D]/50 border border-[#20242D] rounded-xl px-3 py-2 text-white"
-                >
-                  {COMPATIBILITY_MATRIX.map((m) => (
-                    <option key={m.distro} value={m.distro}>{m.distroName}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[#94A3B8] mb-1">{lang === 'fa' ? 'معماری پردازنده' : 'CPU Architecture'}</label>
-                  <select
-                    value={selectedArch}
-                    onChange={(e) => setSelectedArch(e.target.value as LinuxArch)}
-                    className="w-full bg-[#20242D]/50 border border-[#20242D] rounded-xl px-3 py-2 text-white"
-                  >
-                    <option value="amd64">AMD64 / x86_64</option>
-                    <option value="arm64">ARM64 / aarch64</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[#94A3B8] mb-1">{lang === 'fa' ? 'نسخه Xray Core' : 'Xray Core Version'}</label>
-                  <input
-                    type="text"
-                    value={xrayVersion}
-                    onChange={(e) => setXrayVersion(e.target.value)}
-                    className="w-full bg-[#20242D]/50 border border-[#20242D] rounded-xl px-3 py-2 text-white"
-                  />
-                </div>
-              </div>
-
-              {!compatibility.compatible && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">
-                  {compatibility.reason}
-                </div>
-              )}
-
-              <div className="pt-2">
-                <label className="block text-[#94A3B8] mb-1.5">{lang === 'fa' ? 'فایل باینری Xray (ELF)' : 'Xray Binary Executable (ELF)'}</label>
-                <input
-                  type="file"
-                  ref={binaryInputRef}
-                  onChange={handleBinarySelect}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => binaryInputRef.current?.click()}
-                  className="w-full py-2.5 px-4 rounded-xl bg-[#20242D] hover:bg-[#20242D]/80 text-white font-mono text-xs border border-[#20242D] flex items-center justify-center gap-2 transition"
-                >
-                  <FileCheck className="w-4 h-4 text-[#22D3EE]" />
-                  <span>{binaryFile ? binaryFile.name : (lang === 'fa' ? 'انتخاب فایل باینری xray' : 'Select xray binary file')}</span>
-                </button>
-                {calculatingHash && <p className="text-[11px] text-[#22D3EE] mt-1">Calculating SHA256...</p>}
-              </div>
-
-              {binaryHash && (
-                <div>
-                  <label className="block text-[#94A3B8] mb-1">Calculated SHA256 Checksum</label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={binaryHash}
-                    className="w-full bg-[#0B0D10] border border-[#20242D] rounded-xl px-3 py-1.5 text-zinc-300 font-mono text-[11px]"
-                  />
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={handleBuildBundle}
-              disabled={!binaryFile || !compatibility.compatible || calculatingHash}
-              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#F59E0B] to-[#22D3EE] text-[#111318] font-bold text-xs uppercase tracking-wider hover:opacity-95 disabled:opacity-40 transition shadow-lg shadow-[#F59E0B]/20"
-            >
-              {lang === 'fa' ? 'ساخت بسته آفلاین (ZIP)' : 'Build Offline Installation ZIP'}
-            </button>
-          </div>
-
-          <div className="bg-[#111318] border border-[#20242D] rounded-2xl p-5 flex flex-col justify-between shadow-lg">
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-[#22D3EE]" />
-                  {lang === 'fa' ? 'مانیفست پکیج و دانلود ZIP' : 'Bundle Manifest & ZIP Download'}
-                </h3>
-                {bundleBlob && (
-                  <button
-                    onClick={handleDownloadBundleZip}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#22D3EE]/20 text-[#22D3EE] hover:bg-[#22D3EE]/30 transition text-xs font-mono border border-[#22D3EE]/30"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download ZIP</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="bg-[#0B0D10] border border-[#20242D] rounded-xl p-3 h-[240px] font-mono text-[11px] text-zinc-300 overflow-auto">
-                {bundleManifest ? (
-                  <pre><code>{JSON.stringify(bundleManifest, null, 2)}</code></pre>
-                ) : (
-                  <p className="text-[#94A3B8] text-center pt-20 font-mono text-xs">
-                    {lang === 'fa' ? 'هنوز بسته‌ای ساخته نشده است.' : 'No offline bundle built yet.'}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {bundleManifest && !acceptedStep1 && (
-              <button
-                onClick={handleAcceptStep1}
-                className="mt-4 w-full py-2.5 px-4 rounded-xl bg-[#22C55E] hover:bg-[#22C55E]/90 text-[#111318] font-bold text-xs uppercase tracking-wider transition shadow-lg shadow-[#22C55E]/20"
-              >
-                {lang === 'fa' ? 'تایید پکیج آفلاین و ثبت در وضعیت' : 'Accept & Register Offline Bundle'}
-              </button>
-            )}
-
-            {acceptedStep1 && (
-              <div className="mt-4 p-3 rounded-xl bg-[#22C55E]/10 border border-[#22C55E]/30 flex items-center space-x-2 rtl:space-x-reverse text-[#22C55E] text-xs font-mono">
-                <CheckCircle className="w-4 h-4 shrink-0" />
-                <span>{lang === 'fa' ? 'بسته آفلاین تایید شد. اکنون می‌توانید به مراحل بعدی بروید.' : 'Offline bundle accepted and verified successfully.'}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* STEP 2: TRANSFER & INSTALL */}
-      {step.id === 2 && (
         <div className="space-y-6">
+          {/* Official Download Card */}
+          <div className="bg-[#161922] border border-[#2A303C] rounded-2xl p-5 shadow-lg font-mono text-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#2A303C]">
+              <div className="flex items-center space-x-2 rtl:space-x-reverse text-white">
+                <Globe className="w-5 h-5 text-[#22D3EE]" />
+                <h3 className="font-bold">Download Official Xray Core (XTLS/Xray-core)</h3>
+              </div>
+              <a
+                href={OFFICIAL_RELEASES_PAGE}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#20242D] text-[#22D3EE] hover:bg-[#20242D]/80 transition text-[11px] border border-[#2A303C]"
+              >
+                <span>Official Releases</span>
+                <ExternalIcon className="w-3 h-3" />
+              </a>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-[#0B0D10] p-3 rounded-xl border border-[#2A303C]">
+                <span className="text-[#94A3B8] block mb-1">Stable Release:</span>
+                <span className="text-white font-bold">{xrayVersion} (Latest)</span>
+              </div>
+              <div className="bg-[#0B0D10] p-3 rounded-xl border border-[#2A303C]">
+                <span className="text-[#94A3B8] block mb-1">Selected Architecture:</span>
+                <span className="text-white font-bold">{selectedArch.toUpperCase()} ({officialAssetName})</span>
+              </div>
+              <div className="bg-[#0B0D10] p-3 rounded-xl border border-[#2A303C]">
+                <span className="text-[#94A3B8] block mb-1">Source Provenance:</span>
+                <span className="text-[#22C55E] font-bold">github.com/XTLS/Xray-core</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-[#94A3B8]">
+                {lang === 'fa' ? 'فایل رسمی مناسب معماری خود را دانلود کرده و فایل باینری xray را در بخش زیر آپلود کنید.' : 'Download the official asset matching your architecture, then upload the extracted xray binary below.'}
+              </p>
+              <a
+                href={officialDownloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[#F59E0B] to-[#22D3EE] text-[#111318] font-bold text-xs uppercase tracking-wider hover:opacity-95 transition shadow-lg shrink-0"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download Official Asset (.zip)</span>
+              </a>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-[#111318] border border-[#20242D] rounded-2xl p-5 shadow-lg space-y-4 font-mono text-xs">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Server className="w-4 h-4 text-[#F59E0B]" />
-                {lang === 'fa' ? 'تنظیمات اتصال VPS و پلتفرم محلی' : 'VPS Connection & Local Platform Settings'}
+                <Package className="w-4 h-4 text-[#F59E0B]" />
+                {lang === 'fa' ? 'انتخاب پلتفرم و ساخت بسته آفلاین' : 'Platform Target & Build Offline Bundle'}
               </h3>
 
               <div className="space-y-3">
                 <div>
-                  <label className="block text-[#94A3B8] mb-1">{lang === 'fa' ? 'سیستم‌عامل محلی' : 'Local Operating System'}</label>
+                  <label className="block text-[#94A3B8] mb-1">{lang === 'fa' ? 'توزیع لینوکس هدف' : 'Target Linux Distribution'}</label>
                   <select
-                    value={transferOpts.localOs}
-                    onChange={(e) => setTransferOpts({ ...transferOpts, localOs: e.target.value as any })}
+                    value={selectedDistro}
+                    onChange={(e) => setSelectedDistro(e.target.value as LinuxDistro)}
                     className="w-full bg-[#20242D]/50 border border-[#20242D] rounded-xl px-3 py-2 text-white"
                   >
-                    <option value="windows-powershell">Windows PowerShell</option>
-                    <option value="linux-terminal">Linux Terminal</option>
-                    <option value="macos-terminal">macOS Terminal</option>
+                    {COMPATIBILITY_MATRIX.map((m) => (
+                      <option key={m.distro} value={m.distro}>{m.distroName}</option>
+                    ))}
                   </select>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-2">
-                    <label className="block text-[#94A3B8] mb-1">VPS IP / Hostname</label>
-                    <input
-                      type="text"
-                      value={transferOpts.vpsIp}
-                      onChange={(e) => setTransferOpts({ ...transferOpts, vpsIp: e.target.value })}
-                      className="w-full bg-[#20242D]/50 border border-[#20242D] rounded-xl px-3 py-2 text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[#94A3B8] mb-1">SSH Port</label>
-                    <input
-                      type="number"
-                      value={transferOpts.sshPort}
-                      onChange={(e) => setTransferOpts({ ...transferOpts, sshPort: Number(e.target.value) })}
-                      className="w-full bg-[#20242D]/50 border border-[#20242D] rounded-xl px-3 py-2 text-white"
-                    />
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[#94A3B8] mb-1">SSH User</label>
+                    <label className="block text-[#94A3B8] mb-1">{lang === 'fa' ? 'معماری پردازنده' : 'CPU Architecture'}</label>
+                    <select
+                      value={selectedArch}
+                      onChange={(e) => setSelectedArch(e.target.value as LinuxArch)}
+                      className="w-full bg-[#20242D]/50 border border-[#20242D] rounded-xl px-3 py-2 text-white"
+                    >
+                      <option value="amd64">AMD64 / x86_64</option>
+                      <option value="arm64">ARM64 / aarch64</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[#94A3B8] mb-1">{lang === 'fa' ? 'نسخه Xray Core' : 'Xray Core Version'}</label>
                     <input
                       type="text"
-                      value={transferOpts.sshUser}
-                      onChange={(e) => setTransferOpts({ ...transferOpts, sshUser: e.target.value })}
+                      value={xrayVersion}
+                      onChange={(e) => setXrayVersion(e.target.value)}
                       className="w-full bg-[#20242D]/50 border border-[#20242D] rounded-xl px-3 py-2 text-white"
                     />
                   </div>
-                  <div>
-                    <label className="block text-[#94A3B8] mb-1">Auth Method</label>
-                    <select
-                      value={transferOpts.authMethod}
-                      onChange={(e) => setTransferOpts({ ...transferOpts, authMethod: e.target.value as any })}
-                      className="w-full bg-[#20242D]/50 border border-[#20242D] rounded-xl px-3 py-2 text-white"
-                    >
-                      <option value="key">SSH Private Key</option>
-                      <option value="password">Password (Interactive)</option>
-                    </select>
-                  </div>
                 </div>
 
-                {transferOpts.authMethod === 'key' && (
+                {!compatibility.compatible && (
+                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">
+                    {compatibility.reason}
+                  </div>
+                )}
+
+                <div className="pt-2">
+                  <label className="block text-[#94A3B8] mb-1.5">{lang === 'fa' ? 'فایل باینری استخراج‌شده Xray (ELF)' : 'Extracted Xray Binary (ELF)'}</label>
+                  <input
+                    type="file"
+                    ref={binaryInputRef}
+                    onChange={handleBinarySelect}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => binaryInputRef.current?.click()}
+                    className="w-full py-2.5 px-4 rounded-xl bg-[#20242D] hover:bg-[#20242D]/80 text-white font-mono text-xs border border-[#20242D] flex items-center justify-center gap-2 transition"
+                  >
+                    <FileCheck className="w-4 h-4 text-[#22D3EE]" />
+                    <span>{binaryFile ? binaryFile.name : (lang === 'fa' ? 'انتخاب فایل باینری xray' : 'Select extracted xray binary')}</span>
+                  </button>
+                  {calculatingHash && <p className="text-[11px] text-[#22D3EE] mt-1">Calculating SHA256...</p>}
+                </div>
+
+                {binaryHash && (
                   <div>
-                    <label className="block text-[#94A3B8] mb-1">Private Key Path</label>
+                    <label className="block text-[#94A3B8] mb-1">Calculated SHA256 Checksum (OFFLINE_BUNDLE_SHA256)</label>
                     <input
                       type="text"
-                      value={transferOpts.privateKeyPath}
-                      onChange={(e) => setTransferOpts({ ...transferOpts, privateKeyPath: e.target.value })}
-                      className="w-full bg-[#20242D]/50 border border-[#20242D] rounded-xl px-3 py-2 text-white"
+                      readOnly
+                      value={binaryHash}
+                      className="w-full bg-[#0B0D10] border border-[#20242D] rounded-xl px-3 py-1.5 text-zinc-300 font-mono text-[11px]"
                     />
                   </div>
                 )}
               </div>
+
+              <button
+                onClick={handleBuildBundle}
+                disabled={!binaryFile || !compatibility.compatible || calculatingHash}
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#F59E0B] to-[#22D3EE] text-[#111318] font-bold text-xs uppercase tracking-wider hover:opacity-95 disabled:opacity-40 transition shadow-lg shadow-[#F59E0B]/20"
+              >
+                {lang === 'fa' ? 'ساخت بسته آفلاین (ZIP)' : 'Build Offline Installation ZIP'}
+              </button>
             </div>
 
-            <div className="bg-[#111318] border border-[#20242D] rounded-2xl p-5 shadow-lg space-y-4">
-              <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
-                <Laptop className="w-4 h-4 text-[#22D3EE]" />
-                {lang === 'fa' ? 'دستورات نصب Xray روی VPS' : 'Generated Installation Commands'}
-              </h3>
+            <div className="bg-[#111318] border border-[#20242D] rounded-2xl p-5 flex flex-col justify-between shadow-lg">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-[#22D3EE]" />
+                    {lang === 'fa' ? 'مانیفست پکیج و دانلود ZIP' : 'Bundle Manifest & ZIP Download'}
+                  </h3>
+                  {bundleBlob && (
+                    <button
+                      onClick={handleDownloadBundleZip}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#22D3EE]/20 text-[#22D3EE] hover:bg-[#22D3EE]/30 transition text-xs font-mono border border-[#22D3EE]/30"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download ZIP</span>
+                    </button>
+                  )}
+                </div>
 
-              <div className="space-y-3 text-xs font-mono">
-                <div>
-                  <span className="text-[#94A3B8] block mb-1">1. Transfer & Extract & Install:</span>
-                  <div className="bg-[#0B0D10] p-2 rounded-xl border border-[#20242D] text-zinc-300 overflow-x-auto select-text">
-                    <code>{transferCommands.install}</code>
-                  </div>
+                <div className="bg-[#0B0D10] border border-[#20242D] rounded-xl p-3 h-[240px] font-mono text-[11px] text-zinc-300 overflow-auto">
+                  {bundleManifest ? (
+                    <pre><code>{JSON.stringify(bundleManifest, null, 2)}</code></pre>
+                  ) : (
+                    <p className="text-[#94A3B8] text-center pt-20 font-mono text-xs">
+                      {lang === 'fa' ? 'هنوز بسته‌ای ساخته نشده است.' : 'No offline bundle built yet.'}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {!acceptedStep2 ? (
+              {bundleManifest && !acceptedStep1 && (
                 <button
-                  onClick={handleAcceptStep2}
-                  className="w-full py-2.5 px-4 rounded-xl bg-[#22C55E] hover:bg-[#22C55E]/90 text-[#111318] font-bold text-xs uppercase tracking-wider transition shadow-lg shadow-[#22C55E]/20"
+                  onClick={handleAcceptStep1}
+                  className="mt-4 w-full py-2.5 px-4 rounded-xl bg-[#22C55E] hover:bg-[#22C55E]/90 text-[#111318] font-bold text-xs uppercase tracking-wider transition shadow-lg shadow-[#22C55E]/20"
                 >
-                  {lang === 'fa' ? 'تایید نصب و ثبت در وضعیت' : 'Confirm Installation & Register Step 02'}
+                  {lang === 'fa' ? 'تایید پکیج آفلاین و ثبت در وضعیت' : 'Accept & Register Offline Bundle'}
                 </button>
-              ) : (
-                <div className="p-3 rounded-xl bg-[#22C55E]/10 border border-[#22C55E]/30 flex items-center space-x-2 rtl:space-x-reverse text-[#22C55E] text-xs font-mono">
+              )}
+
+              {acceptedStep1 && (
+                <div className="mt-4 p-3 rounded-xl bg-[#22C55E]/10 border border-[#22C55E]/30 flex items-center space-x-2 rtl:space-x-reverse text-[#22C55E] text-xs font-mono">
                   <CheckCircle className="w-4 h-4 shrink-0" />
-                  <span>{lang === 'fa' ? 'مرحله نصب تایید شد.' : 'Step 02 installation confirmed.'}</span>
+                  <span>{lang === 'fa' ? 'بسته آفلاین تایید شد. اکنون می‌توانید به مراحل بعدی بروید.' : 'Offline bundle accepted and verified successfully.'}</span>
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 2: SECURE VPS UPLOAD & CONTROLLED INSTALLATION (7 SECTIONS) */}
+      {step.id === 2 && (
+        <div className="space-y-6">
+          {/* Section 1: VPS Connection */}
+          <div className="bg-[#161922] border border-[#2A303C] rounded-2xl p-5 shadow-lg font-mono text-xs space-y-4">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Server className="w-4 h-4 text-[#F59E0B]" />
+              {lang === 'fa' ? 'مرحله ۲ — ۱. اتصال به VPS و تنظیمات SSH' : 'Step 02 — 1. VPS Connection Settings'}
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-[#94A3B8] mb-1">Local OS Terminal</label>
+                <select
+                  value={transferOpts.localOs}
+                  onChange={(e) => setTransferOpts({ ...transferOpts, localOs: e.target.value as any })}
+                  className="w-full bg-[#20242D] border border-[#2A303C] rounded-xl px-3 py-2 text-white"
+                >
+                  <option value="windows-powershell">Windows PowerShell</option>
+                  <option value="linux-terminal">Linux Terminal</option>
+                  <option value="macos-terminal">macOS Terminal</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[#94A3B8] mb-1">VPS IP / Hostname</label>
+                <input
+                  type="text"
+                  value={transferOpts.vpsIp}
+                  onChange={(e) => setTransferOpts({ ...transferOpts, vpsIp: e.target.value })}
+                  className="w-full bg-[#20242D] border border-[#2A303C] rounded-xl px-3 py-2 text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[#94A3B8] mb-1">SSH Port</label>
+                <input
+                  type="number"
+                  value={transferOpts.sshPort}
+                  onChange={(e) => setTransferOpts({ ...transferOpts, sshPort: Number(e.target.value) })}
+                  className="w-full bg-[#20242D] border border-[#2A303C] rounded-xl px-3 py-2 text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[#94A3B8] mb-1">SSH User</label>
+                <input
+                  type="text"
+                  value={transferOpts.sshUser}
+                  onChange={(e) => setTransferOpts({ ...transferOpts, sshUser: e.target.value })}
+                  className="w-full bg-[#20242D] border border-[#2A303C] rounded-xl px-3 py-2 text-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Preflight */}
+          <div className="bg-[#161922] border border-[#2A303C] rounded-2xl p-5 shadow-lg font-mono text-xs space-y-3">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-[#22D3EE]" />
+              {lang === 'fa' ? 'مرحله ۲ — ۲. آماده‌سازی دایرکتوری Staging روی VPS (Preflight)' : 'Step 02 — 2. VPS Preflight Staging Directory Setup'}
+            </h3>
+            <p className="text-[#94A3B8]">Run this command locally in your terminal to prepare the staging directory on the VPS:</p>
+            <div className="bg-[#0B0D10] p-3 rounded-xl border border-[#2A303C] text-zinc-300 overflow-x-auto select-text">
+              <code>{`ssh ${transferOpts.sshUser}@${transferOpts.vpsIp} -p ${transferOpts.sshPort} "install -d -m 700 ${transferOpts.remoteStagingDir}"`}</code>
+            </div>
+          </div>
+
+          {/* Section 3: Upload Offline Bundle */}
+          <div className="bg-[#161922] border border-[#2A303C] rounded-2xl p-5 shadow-lg font-mono text-xs space-y-3">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Upload className="w-4 h-4 text-[#F59E0B]" />
+              {lang === 'fa' ? 'مرحله ۲ — ۳. آپلود بسته آفلاین با SCP (Upload Offline Bundle)' : 'Step 02 — 3. Upload Offline Bundle via SCP'}
+            </h3>
+            <p className="text-[#94A3B8]">Execute the SCP transfer command from your local machine:</p>
+            <div className="bg-[#0B0D10] p-3 rounded-xl border border-[#2A303C] text-zinc-300 overflow-x-auto select-text">
+              <code>{transferCommands.transfer}</code>
+            </div>
+          </div>
+
+          {/* Section 4: Verify Remote File & Hash */}
+          <div className="bg-[#161922] border border-[#2A303C] rounded-2xl p-5 shadow-lg font-mono text-xs space-y-3">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <FileCheck className="w-4 h-4 text-[#22D3EE]" />
+              {lang === 'fa' ? 'مرحله ۲ — ۴. بررسی فایل راه دور و اعتبارسنجی SHA256' : 'Step 04 — 4. Verify Remote File & SHA256 Checksum'}
+            </h3>
+            <p className="text-[#94A3B8]">Run this command on your VPS to calculate the uploaded file's SHA256:</p>
+            <div className="bg-[#0B0D10] p-3 rounded-xl border border-[#2A303C] text-zinc-300 overflow-x-auto select-text">
+              <code>{`ssh ${transferOpts.sshUser}@${transferOpts.vpsIp} -p ${transferOpts.sshPort} "sha256sum ${transferOpts.remoteStagingDir}/${transferOpts.zipFilename}"`}</code>
+            </div>
+            <div>
+              <label className="block text-[#94A3B8] mb-1">Paste Remote SHA256 Output here (Expected: {binaryHash || 'Pending Step 01 Bundle'}):</label>
+              <input
+                type="text"
+                value={remoteSha256Input}
+                onChange={(e) => setRemoteSha256Input(e.target.value)}
+                placeholder="Paste 64-char hex hash..."
+                className="w-full bg-[#20242D] border border-[#2A303C] rounded-xl px-3 py-2 text-white"
+              />
+            </div>
+            {remoteSha256Input.trim() && (
+              <div className={`p-3 rounded-xl border text-xs font-mono flex items-center gap-2 ${isHashMatching ? 'bg-[#22C55E]/10 border-[#22C55E]/30 text-[#22C55E]' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+                {isHashMatching ? <CheckCircle className="w-4 h-4 shrink-0" /> : <ShieldAlert className="w-4 h-4 shrink-0" />}
+                <span>{isHashMatching ? 'SHA256 Checksum MATCHED successfully!' : 'SHA256 Checksum MISMATCH! Do not proceed.'}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Section 5: Validate ZIP Integrity */}
+          <div className="bg-[#161922] border border-[#2A303C] rounded-2xl p-5 shadow-lg font-mono text-xs space-y-3">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-[#F59E0B]" />
+              {lang === 'fa' ? 'مرحله ۲ — ۵. اعتبارسنجی سلامت آرشیو ZIP روی VPS' : 'Step 02 — 5. Validate ZIP Archive Integrity on VPS'}
+            </h3>
+            <p className="text-[#94A3B8]">Run this command to test archive integrity prior to extraction:</p>
+            <div className="bg-[#0B0D10] p-3 rounded-xl border border-[#2A303C] text-zinc-300 overflow-x-auto select-text">
+              <code>{`ssh ${transferOpts.sshUser}@${transferOpts.vpsIp} -p ${transferOpts.sshPort} "unzip -t ${transferOpts.remoteStagingDir}/${transferOpts.zipFilename}"`}</code>
+            </div>
+            <div className="flex items-center space-x-2 rtl:space-x-reverse pt-2">
+              <input
+                type="checkbox"
+                id="zipOk"
+                checked={zipIntegrityConfirmed}
+                onChange={(e) => setZipIntegrityConfirmed(e.target.checked)}
+                className="rounded bg-[#20242D] border-[#2A303C]"
+              />
+              <label htmlFor="zipOk" className="text-white">
+                {lang === 'fa' ? 'تایید می‌کنم که دستور unzip -t بدون خطا به اتمام رسید.' : 'I confirm that unzip -t completed without errors.'}
+              </label>
+            </div>
+          </div>
+
+          {/* Section 6 & 7: Install & Verify Installation (Gated) */}
+          <div className={`bg-[#161922] border border-[#2A303C] rounded-2xl p-5 shadow-lg font-mono text-xs space-y-4 ${!canUnlockInstallation ? 'opacity-50 pointer-events-none' : ''}`}>
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-[#22C55E]" />
+              {lang === 'fa' ? 'مرحله ۲ — ۶ & ۷. نصب آفلاین و بررسی صحت نصب' : 'Step 02 — 6 & 7. Offline Installation & Verification'}
+            </h3>
+
+            {!canUnlockInstallation && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                {lang === 'fa' ? 'قفل‌شده: برای باز شدن بخش نصب، باید هش SHA256 مطابقت داشته باشد و سلامت ZIP تایید شود.' : 'Locked: Installation is locked until hash matching and ZIP integrity are confirmed.'}
+              </div>
+            )}
+
+            <p className="text-[#94A3B8]">Run this command on your VPS to extract and run the offline installer script (Service is installed but NOT started):</p>
+            <div className="bg-[#0B0D10] p-3 rounded-xl border border-[#2A303C] text-zinc-300 overflow-x-auto select-text">
+              <code>{`ssh ${transferOpts.sshUser}@${transferOpts.vpsIp} -p ${transferOpts.sshPort} "mkdir -p ${transferOpts.remoteStagingDir}/extracted && unzip -q ${transferOpts.remoteStagingDir}/${transferOpts.zipFilename} -d ${transferOpts.remoteStagingDir}/extracted && cd ${transferOpts.remoteStagingDir}/extracted && sudo bash scripts/install.sh"`}</code>
+            </div>
+
+            <p className="text-[#94A3B8] pt-2">Post-installation verification command:</p>
+            <div className="bg-[#0B0D10] p-3 rounded-xl border border-[#2A303C] text-zinc-300 overflow-x-auto select-text">
+              <code>{transferCommands.postVerify}</code>
+            </div>
+
+            {!acceptedStep2 ? (
+              <button
+                onClick={handleAcceptStep2}
+                disabled={!canUnlockInstallation}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#22C55E] hover:bg-[#22C55E]/90 disabled:opacity-40 text-[#111318] font-bold text-xs uppercase tracking-wider transition shadow-lg shadow-[#22C55E]/20"
+              >
+                {lang === 'fa' ? 'تایید نهایی نصب آفلاین و ثبت Step 02' : 'Confirm Offline Installation & Register Step 02'}
+              </button>
+            ) : (
+              <div className="p-3 rounded-xl bg-[#22C55E]/10 border border-[#22C55E]/30 flex items-center space-x-2 rtl:space-x-reverse text-[#22C55E] text-xs font-mono">
+                <CheckCircle className="w-4 h-4 shrink-0" />
+                <span>{lang === 'fa' ? 'مرحله نصب و انتقال (Step 02) با موفقیت تایید شد.' : 'Step 02 transfer and installation successfully confirmed.'}</span>
+              </div>
+            )}
           </div>
         </div>
       )}
