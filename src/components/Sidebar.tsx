@@ -23,6 +23,7 @@ export function Sidebar({
   runtimeStatuses
 }: SidebarProps) {
   const t = translations[lang];
+  const isRtl = lang === 'fa';
 
   const getStatusIcon = (stepId: number, implStatus: StepStatus) => {
     const runtime = runtimeStatuses[stepId] || 'NOT_STARTED';
@@ -58,11 +59,13 @@ export function Sidebar({
       {/* Sidebar Container */}
       <aside
         className={`fixed md:static inset-y-0 ${
-          lang === 'fa' ? 'right-0' : 'left-0'
-        } z-50 w-72 bg-[#111318] border-${
-          lang === 'fa' ? 'l' : 'r'
-        } border-[#20242D] flex flex-col shrink-0 transition-transform duration-300 ${
-          isOpen ? 'translate-x-0' : lang === 'fa' ? 'translate-x-full md:translate-x-0' : '-translate-x-full md:translate-x-0'
+          isRtl ? 'right-0 border-l' : 'left-0 border-r'
+        } z-50 w-72 bg-[#111318] border-[#20242D] flex flex-col shrink-0 transition-transform duration-300 ${
+          isOpen
+            ? 'translate-x-0'
+            : isRtl
+            ? 'translate-x-full md:translate-x-0'
+            : '-translate-x-full md:translate-x-0'
         }`}
       >
         {/* Sidebar Header */}
@@ -116,7 +119,7 @@ export function Sidebar({
         {/* Sidebar Footer info */}
         <div className="p-3 border-t border-[#20242D] bg-[#111318]/50 text-center">
           <p className="text-[10px] text-[#94A3B8] font-mono">
-            {lang === 'fa' ? 'موتور جریان کاری فعال' : 'Workflow Engine Active'}
+            {isRtl ? 'موتور جریان کاری فعال' : 'Workflow Engine Active'}
           </p>
         </div>
       </aside>
