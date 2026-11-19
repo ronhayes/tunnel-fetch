@@ -4,21 +4,24 @@
 - **Repository Status:** Initialized git repository, branch `main` active.
 - **Environment:** Node.js `v24.17.0`, npm `11.13.0`, platform `win32`.
 
-## 2. Project Foundation & Phase 1 through 10 (Full 10-Step Workflow Engine)
+## 2. Project Foundation & Phase 1 through 11
 - **Status:** **ACCEPTED**
 
 ---
 
-## 3. PHASE 11 — OFFICIAL XRAY DOWNLOAD & VPS UPLOAD/INSTALL REPAIR (UPDATED)
-- **Official Xray Core Asset Integration (`src/engines/offline-bundle/official-release.ts`):**
-  - Added official GitHub release asset resolution matching AMD64 (`Xray-linux-64.zip`) and ARM64 (`Xray-linux-arm64-v8a.zip`) directly from `XTLS/Xray-core`.
-  - Added visible official download card in Step 01 (Offline Bundle) with stable version metadata, asset filenames, direct download links, and fallback link to GitHub Releases.
-- **Step 02 Secure VPS Upload & Controlled Installation (Enhanced):**
-  - Updated SCP command generator (`src/engines/transfer-install/command-generator.ts`) to point directly to the local operating system's default Downloads directory (`$HOME\Downloads\...` for Windows PowerShell and `~/Downloads/...` for Linux/macOS) to eliminate `No such file or directory` errors when users run SCP from their default terminal without moving files manually.
-  - Fully implemented the 7 structured subsections (VPS Connection, Preflight with `install -d -m 700`, Upload via SCP, Remote SHA256 Verification, ZIP Integrity Test, Controlled Offline Installation, and Post-installation Verification).
+## 3. PHASE 12 — SIMPLIFIED UI & GUIDED ONBOARDING WIZARD REDESIGN
+- **Onboarding Wizard (`src/components/OnboardingWizard.tsx`):**
+  - Designed a user-friendly modal wizard presented immediately upon opening the application, specifically tailored for non-technical users.
+  - **Step 1:** Collects essential VPS server connection parameters (IP/Hostname, SSH Port, SSH Username, and Authentication Method / Private Key path).
+  - **Step 2:** Collects the VPN connection string or subscription link (VLESS / VMess / Trojan / SS).
+  - Automatically propagates these settings across Step 02 (Transfer & Install), Step 04 (Xray Config Generator), Step 05 (Config Upload), Step 06 (Config Apply), Step 07 & 08 (Service & Connectivity), and Step 09 (Downloader Routing).
+- **GitHub Deployment & Live Release:**
+  - **GitHub Repository:** `https://github.com/ronhayes/tunnel-fetch`
+  - **Published Branch:** `main`
+  - **GitHub Actions Workflow Result:** `PASS` (Run ID `44588151813`)
+  - **Live URL:** `https://ronhayes.github.io/tunnel-fetch/`
 - **Build Results:**
   - `npm run build`: **PASS** (`tsc -b && vite build` completed successfully).
 
 ## 4. Final Decision
-- **A. PHASE 11 ACCEPTED**
-- **Limitations:** Real VPS execution is generated for manual user execution in terminal.
+- **A. PHASE 12 ACCEPTED**
