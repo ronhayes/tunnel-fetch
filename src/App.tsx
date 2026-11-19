@@ -4,11 +4,13 @@ import { Sidebar } from './components/Sidebar';
 import { MainWorkspace } from './components/MainWorkspace';
 import { SessionStatusPanel } from './components/SessionStatusPanel';
 import { BottomNavigation } from './components/BottomNavigation';
+import { OnboardingWizard } from './components/OnboardingWizard';
 import { WORKFLOW_STEPS } from './stepsData';
 import type { Language, SessionState, WorkflowStep, RuntimeStatus } from './types';
 import { translations } from './i18n';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Settings2 } from 'lucide-react';
 import { createInitialWorkflowState } from './workflow/workflow-engine';
+import type { TransferOptions } from './engines/transfer-install/command-generator';
 
 export function App() {
   const [lang, setLang] = useState<Language>('fa');
@@ -16,6 +18,7 @@ export function App() {
   const [steps] = useState<WorkflowStep[]>(WORKFLOW_STEPS);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isStatusPanelOpen, setIsStatusPanelOpen] = useState(true);
+  const [showWizard, setShowWizard] = useState(true);
 
   // Workflow Engine State
   const [engineState, setEngineState] = useState(createInitialWorkflowState());
@@ -30,6 +33,11 @@ export function App() {
     sessionState: 'READY'
   });
 
+  const [wizardConfig, setWizardConfig] = useState<{ transferOpts: TransferOptions | null; vpnUri: string }>({
+    transferOpts: null,
+    vpnUri: ''
+  });
+
   const t = translations[lang];
   const isRtl = lang === 'fa';
 
@@ -40,6 +48,7 @@ export function App() {
 
   const handleResetSession = () => {
     if (window.confirm(t.confirmReset)) {
+      setShowWizard(true);
       setActiveStepId(1);
       setEngineState(createInitialWorkflowState());
       setSessionState({
@@ -52,6 +61,19 @@ export function App() {
         sessionState: 'IDLE'
       });
     }
+  };
+
+  const handleCompleteSetup = (transferOpts: TransferOptions, vpnUri: string) => {
+    setWizardConfig({ transferOpts, vpnUri });
+    setShowWizard(false);
+    // Mark step 1 ready and prefill state
+    setEngineState(prev => ({
+      ...prev,
+      runtimeStatuses: {
+        ...prev.runtimeStatuses,
+        1: 'READY'
+      }
+    }));
   };
 
   const currentStep = steps.find((s) => s.id === activeStepId) || steps[0];
@@ -83,17 +105,21 @@ export function App() {
       dir={isRtl ? 'rtl' : 'ltr'}
       className="flex flex-col h-screen w-screen overflow-hidden bg-[#0B0D10] text-[#F8FAFC] font-sans select-none"
     >
+      {showWizard && (
+        <OnboardingWizard lang={lang} onCompleteSetup={handleCompleteSetup} />
+      )}
+
       {/* Header */}
       <Header
         lang={lang}
         onToggleLang={handleToggleLang}
         sessionState={sessionState}
         onResetSession={handleResetSession}
-        onOpenSettings={() => alert(lang === 'fa' ? 'تنظیمات پیش‌فرض فعال است.' : 'Default settings active.')}
+        onOpenSettings={() => setShowWizard(true)}
         onOpenHelp={() => alert(lang === 'fa' ? 'راهنمای Tunnel Fetch: ابزار هوشمند آماده‌سازی تونل Xray.' : 'Tunnel Fetch Help: Smart Xray tunnel preparation tool.')}
       />
 
-      {/* Mobile Sidebar Toggle Bar */}
+      {/* Mobile Sidebar Toggle Bar & Wizard Reopen */}
       <div className="md:hidden bg-[#161922] border-b border-[#2A303C] px-4 py-2 flex items-center justify-between shrink-0">
         <button
           onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
@@ -102,7 +128,13 @@ export function App() {
           {isMobileSidebarOpen ? <X className="w-4 h-4 text-[#F59E0B]" /> : <Menu className="w-4 h-4 text-[#F59E0B]" />}
           <span>{t.stepsHeader} ({activeStepId}/10)</span>
         </button>
-        <span className="text-xs text-[#22D3EE] font-mono">{isRtl ? currentStep.titleFa : currentStep.titleEn}</span>
+        <button
+          onClick={() => setShowWizard(true)}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#22D3EE]/20 text-[#22D3EE] text-xs font-mono border border-[#22D3EE]/30"
+        >
+          <Settings2 className="w-3.5 h-3.5" />
+          <span>{isRtl ? 'تغییر تنظیمات سرور' : 'Server Setup'}</span>
+        </button>
       </div>
 
       {/* Main 3-Column Deterministic Grid Layout with Grid Template Areas */}
@@ -152,6 +184,7 @@ export function App() {
               runtimeStatus={engineState.runtimeStatuses[activeStepId] || 'NOT_STARTED'}
               onUpdateRuntimeStatus={handleUpdateRuntimeStatus}
               allRuntimeStatuses={engineState.runtimeStatuses}
+              wizardConfig={wizardConfig}
             />
           </div>
 

@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { Terminal, CheckCircle, Sliders, Database, Lock, ShieldCheck, RefreshCw, Download, Copy, Code, Package, FileCheck, Server, Laptop, Upload, Activity, Globe, ShieldAlert, ArrowDownCircle, ExternalLink as ExternalIcon } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Terminal, CheckCircle, Sliders, Database, Lock, ShieldCheck, RefreshCw, Download, Copy, Code, Package, FileCheck, Server, Laptop, Upload, Activity, Globe, ShieldAlert, ArrowDownCircle, ExternalLink } from 'lucide-react';
 import type { Language, WorkflowStep } from '../types';
 import { translations } from '../i18n';
 import { CommandCenter } from './CommandCenter';
@@ -29,6 +29,7 @@ interface MainWorkspaceProps {
   runtimeStatus: string;
   onUpdateRuntimeStatus: (stepId: number, status: any) => void;
   allRuntimeStatuses: Record<number, string>;
+  wizardConfig: { transferOpts: TransferOptions | null; vpnUri: string };
 }
 
 export function MainWorkspace({
@@ -38,7 +39,8 @@ export function MainWorkspace({
   isStatusPanelOpen,
   runtimeStatus,
   onUpdateRuntimeStatus,
-  allRuntimeStatuses
+  allRuntimeStatuses,
+  wizardConfig
 }: MainWorkspaceProps) {
   const t = translations[lang];
   const stepDef = getStepById(step.id);
@@ -81,6 +83,41 @@ export function MainWorkspace({
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [parseWarnings, setParseWarnings] = useState<string[]>([]);
   const [acceptedStep3, setAcceptedStep3] = useState(false);
+
+  // Apply wizard config when available
+  useEffect(() => {
+    if (wizardConfig.transferOpts) {
+      setTransferOpts(prev => ({
+        ...prev,
+        vpsIp: wizardConfig.transferOpts!.vpsIp,
+        sshPort: wizardConfig.transferOpts!.sshPort,
+        sshUser: wizardConfig.transferOpts!.sshUser,
+        authMethod: wizardConfig.transferOpts!.authMethod,
+        privateKeyPath: wizardConfig.transferOpts!.privateKeyPath
+      }));
+      setUploadOpts(prev => ({
+        ...prev,
+        vpsIp: wizardConfig.transferOpts!.vpsIp,
+        sshPort: wizardConfig.transferOpts!.sshPort,
+        sshUser: wizardConfig.transferOpts!.sshUser
+      }));
+      setApplyOpts(prev => ({
+        ...prev,
+        vpsIp: wizardConfig.transferOpts!.vpsIp,
+        sshPort: wizardConfig.transferOpts!.sshPort,
+        sshUser: wizardConfig.transferOpts!.sshUser
+      }));
+      setConnOpts(prev => ({
+        ...prev,
+        vpsIp: wizardConfig.transferOpts!.vpsIp,
+        sshPort: wizardConfig.transferOpts!.sshPort,
+        sshUser: wizardConfig.transferOpts!.sshUser
+      }));
+    }
+    if (wizardConfig.vpnUri) {
+      setUriInput(wizardConfig.vpnUri);
+    }
+  }, [wizardConfig]);
 
   // Step 4 state
   const [genOptions, setGenOptions] = useState<XrayGeneratorOptions>({
@@ -401,7 +438,7 @@ export function MainWorkspace({
         </div>
       )}
 
-      {/* STEP 1: OFFLINE BUNDLE WITH OFFICIAL XRAY DOWNLOAD CARD */}
+      {/* STEP 1: OFFLINE BUNDLE */}
       {step.id === 1 && (
         <div className="space-y-6">
           {/* Official Download Card */}
@@ -418,7 +455,7 @@ export function MainWorkspace({
                 className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#20242D] text-[#22D3EE] hover:bg-[#20242D]/80 transition text-[11px] border border-[#2A303C]"
               >
                 <span>Official Releases</span>
-                <ExternalIcon className="w-3 h-3" />
+                <ExternalLink className="w-3 h-3" />
               </a>
             </div>
 
