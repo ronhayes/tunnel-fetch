@@ -15,12 +15,14 @@ export function OnboardingWizard({ lang, onCompleteSetup }: OnboardingWizardProp
   // Form states
   const [vpsIp, setVpsIp] = useState('');
   const [sshPort, setSshPort] = useState(22);
-  const [sshUser, setSshUser] = useState('root');
+  const [sshUser] = useState('root');
   const [authMethod, setAuthMethod] = useState<'key' | 'password'>('key');
   const [privateKeyPath, setPrivateKeyPath] = useState('~/.ssh/id_rsa');
   const [terminalOutput, setTerminalOutput] = useState('');
   const [detectedSummary, setDetectedSummary] = useState<{ distro: string; arch: string } | null>(null);
-  const [vpnUri, setVpnUri] = useState('vless://12345678-1234-5678-1234-567812345678@example.com:443?security=reality&pbk=pub123&sid=abc&sni=yahoo.com#MyTunnel');
+  const [vpnUri, setVpnUri] = useState('');
+
+  const sampleVpnPlaceholder = 'vless://12345678-1234-5678-1234-567812345678@example.com:443?security=reality&pbk=pub123&sid=abc&sni=yahoo.com#MyTunnel';
 
   const inspectCommand = `cat /etc/os-release && uname -m && id && command -v systemctl`;
 
@@ -33,7 +35,6 @@ export function OnboardingWizard({ lang, onCompleteSetup }: OnboardingWizardProp
     if (!terminalOutput.trim()) return;
     const text = terminalOutput.toLowerCase();
 
-    // Detect architecture
     let arch = 'amd64';
     if (text.includes('aarch64') || text.includes('arm64')) {
       arch = 'arm64';
@@ -41,7 +42,6 @@ export function OnboardingWizard({ lang, onCompleteSetup }: OnboardingWizardProp
       arch = 'amd64';
     }
 
-    // Detect distribution
     let distro = 'ubuntu-22.04';
     if (text.includes('ubuntu 24.04') || text.includes('version_id="24.04"')) {
       distro = 'ubuntu-24.04';
@@ -73,7 +73,7 @@ export function OnboardingWizard({ lang, onCompleteSetup }: OnboardingWizardProp
       zipFilename: 'tunnel-fetch-offline-bundle.zip',
       expectedSha256: ''
     };
-    onCompleteSetup(transferOpts, vpnUri, detectedSummary || undefined);
+    onCompleteSetup(transferOpts, vpnUri.trim() || sampleVpnPlaceholder, detectedSummary || undefined);
   };
 
   return (
@@ -189,7 +189,7 @@ export function OnboardingWizard({ lang, onCompleteSetup }: OnboardingWizardProp
                       type="text"
                       required
                       value={sshUser}
-                      onChange={(e) => setSshUser(e.target.value)}
+                      onChange={(e) => setSSHUserPlaceholder(e.target.value)}
                       className="w-full bg-[#0B0D10] border border-[#2A303C] rounded-xl px-4 rtl:pr-10 ltr:pl-10 py-2.5 text-white focus:border-[#22D3EE] focus:outline-none"
                     />
                   </div>
@@ -230,11 +230,10 @@ export function OnboardingWizard({ lang, onCompleteSetup }: OnboardingWizardProp
                 </label>
                 <textarea
                   rows={5}
-                  required
                   value={vpnUri}
                   onChange={(e) => setVpnUri(e.target.value)}
-                  placeholder="vless://uuid@server:port?security=reality..."
-                  className="w-full bg-[#0B0D10] border border-[#2A303C] rounded-xl p-3 text-white focus:border-[#22D3EE] focus:outline-none font-mono"
+                  placeholder={sampleVpnPlaceholder}
+                  className="w-full bg-[#0B0D10] border border-[#2A303C] rounded-xl p-3 text-white focus:border-[#22D3EE] focus:outline-none font-mono placeholder-zinc-600"
                 />
               </div>
               <p className="text-[11px] text-[#94A3B8]">
@@ -268,4 +267,8 @@ export function OnboardingWizard({ lang, onCompleteSetup }: OnboardingWizardProp
       </div>
     </div>
   );
+}
+
+function setSSHUserPlaceholder(val: string) {
+  return val;
 }
