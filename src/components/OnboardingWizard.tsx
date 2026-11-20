@@ -155,7 +155,7 @@ export function OnboardingWizard({ lang, onCompleteSetup }: OnboardingWizardProp
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="md:col-span-2">
-                  <label className="block text-[#94A3B8] mb-1.5">{isFa ? 'آدرس IP سرور VPS (الزامی)' : 'VPS IP Address (Required)'}</label>
+                  <label className="block text-[#94A3B8] mb-1.5">{isFa ? 'آدرس IP سرور VPS (الزامی - خالی برای ورود دستی)' : 'VPS IP Address (Required)'}</label>
                   <div className="relative">
                     <Server className="absolute rtl:right-3 ltr:left-3 top-3 w-4 h-4 text-[#22D3EE]" />
                     <input
@@ -163,7 +163,7 @@ export function OnboardingWizard({ lang, onCompleteSetup }: OnboardingWizardProp
                       required
                       value={vpsIp}
                       onChange={(e) => setVpsIp(e.target.value)}
-                      placeholder="مثال: 94.184.18.146"
+                      placeholder="مثال: 192.168.1.50 یا 94.184.x.x"
                       className="w-full bg-[#0B0D10] border border-[#2A303C] rounded-xl px-4 rtl:pr-10 ltr:pl-10 py-2.5 text-white focus:border-[#22D3EE] focus:outline-none placeholder-zinc-600"
                     />
                   </div>
